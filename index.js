@@ -20,16 +20,18 @@ mongoose.connect(process.env.MONGO_URL)
 // create Schema
 const userSchema = new Schema({
   username: { type: String, unique: true },
-  count: Number,
-  log: [{
-    description: String,
-    duration: Number,
-    date: String
-  }]
+})
+
+const exerciseSchema = new Schema({
+  user_id: String,
+  description: String,
+  duration: Number,
+  date: Date
 })
 
 // create Model
 const ExerciseUsers = mongoose.model('ExerciseUsers', userSchema);
+const ExerciseLogs = mongoose.model('ExerciseLogs', exerciseSchema);
 
 // post add new users
 app.post('/api/users', async (req, res) => {
@@ -39,8 +41,7 @@ app.post('/api/users', async (req, res) => {
   const exist_user = await ExerciseUsers.findOne({ username: username });
   if (!exist_user) {
     const new_user = new ExerciseUsers({
-      username: username,
-      count: 0
+      username: username
     })
     await new_user.save();
     console.log('add new user')
@@ -55,30 +56,27 @@ app.post('/api/users', async (req, res) => {
 // post new exercise
 app.post('/api/users/:_id/exercises', async (req,res)=>{
   // get user data
+  const id = req.params._id
   const {description,duration,date} = req.body
-  const user_data = await ExerciseUsers.findById(req.params._id);
+  const user_data = await ExerciseUsers.findById(id);
   if(!user_data){
-    res.json({"message":"no user data"});
+    res.send("no user data");
   }
-  user_data.log.push({
+  const new_exercise = new ExerciseLogs({
+    user_id: id,
     description: description,
     duration: Number(duration),
     date: date? new Date(date) : new Date()
-  });
-  user_data.count++
-  await user_data.save();
+  })
+  await new_exercise.save();
 
-  // get last log added
-  const last_data = await ExerciseUsers.findById(req.params._id);
-  const last_log = last_data.log.length - 1
-  const updated_data = {
-    _id: last_data._id,
-    username: last_data.username,
-    description: last_data.log[last_log].description,
-    duration: last_data.log[last_log].duration,
-    date: new Date(last_data.log[last_log].date).toDateString()
-  }
-  res.json(updated_data);
+  res.json({
+    _id: id,
+    username: user_data.username,
+    description: new_exercise.description,
+    duration: new_exercise.duration,
+    date: new Date(new_exercise.date).toDateString()
+  });
 });
 
 // get all users
@@ -91,63 +89,55 @@ app.get('/api/users', async (req,res)=>{
 // get all user log
 app.get('/api/users/:id/logs', async (req,res)=>{
   // res.query for json after ?
+  const id = req.params.id
   const {from,to,limit} = req.query
   // if user exist
-  const user = await ExerciseUsers.findById(req.params.id);
+  const user = await ExerciseUsers.findById(id);
   if(!user){
     res.send('No user in database');
-    return
   }
   // object Date for filter date:{$gte: from ,$lte: to}
   let objDate = {}
   if(from){
-    objDate[`$gte`] = new Date(from).toDateString();
+    objDate['$gte'] = new Date(from);
   }
   if(to){
-    objDate["$lte"] = new Date(to).toDateString();
+    objDate['$lt'] = new Date(to);
   }
   // filter for find.({_id:id,date:{objDate}})
   let filter = {
-    _id: req.params.id
+    user_id: id
   }
   if(from || to){
     filter.date = objDate;
   }
   // fine user_data
-  const user_data = await ExerciseUsers.findOne(filter).limit(+limit&&100);
-  const log = user_data.log.map(data=>{
+  const user_logs = await ExerciseLogs.find(filter).limit(limit||100);
+  const logs = user_logs.map(log=>{
     return {
-      description: data.description,
-      duration: data.duration,
-      data: new Date(data.date).toDateString()
+      description: log.description,
+      duration: log.duration,
+      date: new Date(log.date).toDateString()
     }
   })
   // json
-  const json_data = {
-    _id: user_data._id,
-    username: user_data.username,
-    count: user_data.log.length,
-    log: log
-  }
 
-  res.json(json_data);
+  res.json({
+    _id: id,
+    username: user.username,
+    count: user_logs.length,
+    log: logs
+  });
   console.log(filter)
+  console.log(logs)
   console.log('all user log')
 })
 
 // delete all users
 app.get('/api/deleteall', async (req,res)=>{
   await ExerciseUsers.deleteMany().then(console.log('all users are deleted'));
+  await ExerciseLogs.deleteMany().then(console.log('delete all logs'))
   res.redirect('/');
-})
-
-app.get('/api/users/:id/test', async (req,res)=>{
-  const user = ExerciseUsers.findById(req.params.id);
-  user.find({date:{$gte: '1990-01-01'}})
-
-  const doc = await user.exec();
-
-  res.json(doc)
 })
 
 const listener = app.listen(process.env.PORT || 3000, () => {
