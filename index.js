@@ -52,6 +52,19 @@ app.post('/api/users', async (req, res) => {
   res.json(user);
 })
 
+// get all users
+app.get('/api/users', async (req,res)=>{
+  const all_users = await ExerciseUsers.find({}).select('username');
+  res.json(all_users);
+  console.log('all users in database')
+})
+
+// delete all users
+app.get('/api/deleteall', async (req,res)=>{
+  await ExerciseUsers.deleteMany().then(console.log('all users are deleted'));
+  res.redirect('/');
+})
+
 const listener = app.listen(process.env.PORT || 3000, () => {
   console.log('Your app is listening on port ' + listener.address().port)
 })
