@@ -31,7 +31,7 @@ const userSchema = new Schema({
 // create Model
 const ExerciseUsers = mongoose.model('ExerciseUsers', userSchema);
 
-// route
+// post add new users
 app.post('/api/users', async (req, res) => {
   // get username for form
   const username = req.body.username;
@@ -51,6 +51,38 @@ app.post('/api/users', async (req, res) => {
   const user = await ExerciseUsers.findOne({ username: username }).select('username');
   res.json(user);
 })
+
+// post new exercise
+app.post('/api/users/:_id/exercises', async (req,res)=>{
+  // date formate
+  let current_date = new Date().toDateString();
+  if(req.body.date !== ''){
+    current_date = new Date(req.body.date).toDateString();
+  }
+  // get user data
+  const user_data = await ExerciseUsers.findById(req.params._id);
+  if(!user_data){
+    res.json({"message":"no user data"});
+  }
+  user_data.log.push({
+    description: req.body.description,
+    duration: Number(req.body.duration),
+    date: current_date
+  });
+  await user_data.save();
+
+  // get last log added
+  const last_data = await ExerciseUsers.findById(req.params._id);
+  const last_log = last_data.log.length - 1
+  const updated_data = {
+    _id: last_data._id,
+    username: last_data.username,
+    description: last_data.log[last_log].description,
+    duration: last_data.log[last_log].duration,
+    date: last_data.log[last_log].date
+  }
+  res.json(updated_data);
+});
 
 // get all users
 app.get('/api/users', async (req,res)=>{
